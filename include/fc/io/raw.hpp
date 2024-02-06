@@ -889,9 +889,8 @@ namespace fc {
        --_max_depth;
        unsigned_int w;
        fc::raw::unpack( s, w, _max_depth );
-       static_variant<T...> helper( static_cast<typename static_variant<T...>::tag_type>(w.value) );
-       helper.visit( unpack_static_variant<Stream>( s, _max_depth ) );
-       sv = helper;
+       sv.set_which(w.value);
+       sv.visit( unpack_static_variant<Stream>( s, _max_depth ) );
     }
 
 } } // namespace fc::raw
