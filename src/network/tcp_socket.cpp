@@ -166,7 +166,8 @@ namespace fc {
     }
     catch (const std::exception& except)
     {
-      elog("Exception binding outgoing connection to desired local endpoint ${endpoint}: ${what}", ("endpoint", local_endpoint)("what", except.what()));
+      wlog("Exception binding outgoing connection to desired local endpoint ${endpoint}: ${what}",
+           ("endpoint", local_endpoint)("what", except.what()));
       FC_THROW("error binding to ${endpoint}: ${what}", ("endpoint", local_endpoint)("what", except.what()));
     }
   }
