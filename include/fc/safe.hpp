@@ -119,7 +119,7 @@ namespace fc {
       {
           if( b.value > 0 && a.value < (std::numeric_limits<T>::min() + b.value) )
              FC_CAPTURE_AND_THROW( underflow_exception, (a)(b) );
-          if( b.value < 0 && a.value > (std::numeric_limits<T>::max() + b.value) )
+          if( b.template value < 0 && a.value > (std::numeric_limits<T>::max() + b.value) )
              FC_CAPTURE_AND_THROW( overflow_exception, (a)(b) );
           return safe( a.value - b.value );
       }
