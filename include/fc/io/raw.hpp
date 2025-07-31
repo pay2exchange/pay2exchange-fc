@@ -14,6 +14,7 @@
 #include <map>
 #include <deque>
 
+
 namespace fc {
     namespace raw {
 
@@ -40,6 +41,7 @@ namespace fc {
         s.read( (char*) hilo, sizeof(hilo) );
         v = uint128( hilo[0].value(), hilo[1].value() );
     }
+    
 
     template<typename Stream>
     inline void pack( Stream& s, const fc::exception& e, uint32_t _max_depth )

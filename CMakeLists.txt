@@ -160,6 +160,7 @@ find_package(OpenSSL REQUIRED)
 set( fc_sources
      src/popcount.cpp
      src/variant.cpp
+     src/hookedint.cpp
      src/exception.cpp
      src/variant_object.cpp
      src/static_variant.cpp
