@@ -2,13 +2,34 @@
 #ifndef include_guard_hookedint
 #define include_guard_hookedint
 
+#include <fc/reflect/typename.hpp>
 #include <iostream>
 
-#include <fc/reflect/typename.hpp>
 
-
+// to print the integer:
+#include <string>
+#include <cstdint>
+#include <array>
+#include <sstream>
+#include <iomanip>
 
 void HookedInt_trigger(int level);
+
+namespace detail {
+	std::string uint128_to_string(__uint128_t value);
+
+	template <typename T> std::string almost_any_int_to_str(T the_int) {
+		std::ostringstream oss;
+		oss<<the_int;
+		return oss.str();
+	}
+	template <> std::string almost_any_int_to_str(__uint128_t the_int)
+		;
+       /*	{
+		return uint128_to_string(the_int);
+	}*/
+
+}
 
 template<typename T>
 class HookedInt {
@@ -25,7 +46,9 @@ private:
     mutable bool value_old_isset;
 
     std::ostream& log_startline() const {
-	    std::cout << "(HookedInt)(ptr=" << (static_cast<const void*>(this)) << ") ";
+	    std::cout << "(HookedInt)(ptr=" << (static_cast<const void*>(this)) << ")"
+		<< " (value="<<detail::almost_any_int_to_str(value)<<")"
+		<< " (old="<< ( value_old ? detail::almost_any_int_to_str(value) : "none" )<<")";
 	    return std::cout;
     }
 
@@ -44,9 +67,19 @@ public:
     HookedInt& operator=(const HookedInt& other) { value = other.value; return *this; }
     HookedInt& operator=(HookedInt&& other) noexcept { value = std::move(other.value); return *this; }
 
-    // Implicit conversion
-    operator T&() { return value; }
-    operator const T&() const { return value; }
+    operator T&() { log_startline()<<"Access r/w\n"; return value; }
+    operator const T&() const { log_startline()<<"read."; return value; }
+
+    T& get() { log_startline()<<"Get r/w\n"; return value; }
+    const T& get() const { log_startline()<<"Get readonly\n"; return value; }
+
+    T& unwrap() { return get(); }
+    const T& unwrap() const { return get(); }
+
+    // Transparent pointer access
+    T* operator->() { return &get(); }
+    const T* operator->() const { return &get(); }
+
 
     // Arithmetic
     HookedInt operator+(const HookedInt& other) const { return value + other.value; }
@@ -54,10 +87,11 @@ public:
     HookedInt operator*(const HookedInt& other) const { return value * other.value; }
     HookedInt operator/(const HookedInt& other) const { return value / other.value; }
 
-    HookedInt& operator+=(const HookedInt& other) { value += other.value; return *this; }
-    HookedInt& operator-=(const HookedInt& other) { value -= other.value; return *this; }
-    HookedInt& operator*=(const HookedInt& other) { value *= other.value; return *this; }
-    HookedInt& operator/=(const HookedInt& other) { value /= other.value; return *this; }
+    // Modify
+    HookedInt& operator+=(const HookedInt& other) { value += other.value; log_startline()<<"op+= called"; return *this; }
+    HookedInt& operator-=(const HookedInt& other) { value -= other.value; log_startline()<<"op-= called"; return *this; }
+    HookedInt& operator*=(const HookedInt& other) { value *= other.value; log_startline()<<"op*= called";  return *this; }
+    HookedInt& operator/=(const HookedInt& other) { value /= other.value; log_startline()<<"op/= called";  return *this; }
 
     // Comparison
     bool operator==(const HookedInt& other) const { return value == other.value; }
@@ -66,17 +100,6 @@ public:
     bool operator<=(const HookedInt& other) const { return value <= other.value; }
     bool operator>(const HookedInt& other)  const { return value > other.value; }
     bool operator>=(const HookedInt& other) const { return value >= other.value; }
-
-    // Access underlying value
-    T& get() { return value; }
-    const T& get() const { return value; }
-
-    // Transparent pointer access
-    T* operator->() { return &value; }
-    const T* operator->() const { return &value; }
-
-    T& unwrap() { return value; }
-    const T& unwrap() const { return value; }
 
     void debug_instrument() const {
 	    if (value_old_isset) {
