@@ -14,6 +14,31 @@
 #include <map>
 #include <deque>
 
+#include <fc/safe.hpp>
+#include <fc/uint128.hpp>
+#include <fc/hookedint.hpp>
+
+// ==================================================================
+namespace fc {
+namespace raw {
+
+template<typename Stream, typename T>
+inline void pack(Stream& s, const HookedInt<T>& v, uint32_t _depth = 0) {
+    pack(s, v.unwrap(), _depth);  // Forward to wrapped value
+}
+
+template<typename Stream, typename T>
+inline void unpack(Stream& s, HookedInt<T>& v, uint32_t _depth = 0) {
+    T inner;
+    unpack(s, inner, _depth);
+    v = HookedInt<T>(inner);  // Assign or construct wrapped value
+}
+
+} // namespace raw
+} // namespace fc
+// ==================================================================
+
+
 
 namespace fc {
     namespace raw {
@@ -896,4 +921,5 @@ namespace fc {
     }
 
 } } // namespace fc::raw
+ 
 

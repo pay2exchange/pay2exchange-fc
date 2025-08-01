@@ -4,6 +4,9 @@
 
 #include <iostream>
 
+#include <fc/reflect/typename.hpp>
+
+
 
 void HookedInt_trigger(int level);
 
@@ -94,7 +97,29 @@ public:
 
 };
 
+/*
+namespace fc {
 
+template<typename T>
+struct get_typename<HookedInt<T>> {
+   static const char* name() { return "HookedInt"; }  // Optional: use typeid(T).name() for more detail
+};
+
+}
+*/
+
+namespace fc {
+
+template<>
+struct get_typename<HookedInt<__uint128_t>> {
+    static const char* name() { return "HookedInt<__uint128_t>"; }
+};
+
+}
+
+
+
+/*
 namespace fc {
 namespace raw {
 
@@ -112,6 +137,6 @@ inline void unpack(Stream& s, HookedInt<T>& v, uint32_t _depth = 0) {
 
 } // namespace raw
 } // namespace fc
-
+*/
 
 #endif
