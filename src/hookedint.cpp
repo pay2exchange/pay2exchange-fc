@@ -27,7 +27,7 @@ namespace detail {
 	    while (now > 0) {
 		__uint128_t q = now / divisor;
 		__uint128_t r = now % divisor;
-		
+
 		if (!( i < (sizeof(parts)/sizeof(parts[0])))) { std::cerr<<"ERROR assert failed at " << __FILE__ << ":" << __LINE__ << "\n";  std::abort(); } // assert
 		parts[i++] = static_cast<uint64_t>(r);
 		now = q;
