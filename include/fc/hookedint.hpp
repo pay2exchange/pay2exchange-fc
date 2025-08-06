@@ -2,6 +2,14 @@
 #ifndef include_guard_hookedint
 #define include_guard_hookedint
 
+/**
+ * @file HookedInt is a wrapper (template-class) that wraps an integer type (now supports especially int128) to aid debugging by informing when value changes (for some cases)
+ * @todo make sure it supports other integral types (was tested on __uint128_t) test in general fc::uint128_t (on platforms without __uint128_t)
+ * @todo support other operators - only some of them call log properly, this code is not finished
+ */
+
+/// mostly vibecoded
+
 #include <fc/reflect/typename.hpp>
 #include <iostream>
 
@@ -25,20 +33,10 @@ namespace detail {
 	}
 	template <> std::string almost_any_int_to_str(__uint128_t the_int)
 		;
-       /*	{
-		return uint128_to_string(the_int);
-	}*/
-
 }
 
 template<typename T>
 class HookedInt {
-	/*
-    static_assert(std::is_arithmetic<T>::value ||
-                  std::is_same<T, __uint128_t>::value ||
-                  std::is_same<T, boost::multiprecision::uint128_t>::value,
-                  "HookedInt<T> should wrap an integer-like type");
-*/
 private:
     T value;
 
@@ -120,16 +118,6 @@ public:
 
 };
 
-/*
-namespace fc {
-
-template<typename T>
-struct get_typename<HookedInt<T>> {
-   static const char* name() { return "HookedInt"; }  // Optional: use typeid(T).name() for more detail
-};
-
-}
-*/
 
 namespace fc {
 
@@ -140,26 +128,5 @@ struct get_typename<HookedInt<__uint128_t>> {
 
 }
 
-
-
-/*
-namespace fc {
-namespace raw {
-
-template<typename Stream, typename T>
-inline void pack(Stream& s, const HookedInt<T>& v, uint32_t _depth = 0) {
-    pack(s, v.unwrap(), _depth);  // Forward to wrapped value
-}
-
-template<typename Stream, typename T>
-inline void unpack(Stream& s, HookedInt<T>& v, uint32_t _depth = 0) {
-    T inner;
-    unpack(s, inner, _depth);
-    v = HookedInt<T>(inner);  // Assign or construct wrapped value
-}
-
-} // namespace raw
-} // namespace fc
-*/
 
 #endif

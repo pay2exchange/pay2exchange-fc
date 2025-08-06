@@ -1,5 +1,4 @@
 #pragma once 
-/// mostly vibecoded
 
 #include <array>
 #include <cstddef>
