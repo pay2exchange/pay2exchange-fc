@@ -701,6 +701,18 @@ void from_variant( const variant& var, uint128_t& vo, uint32_t max_depth )
 #endif
 }
 
+void to_variant( const HookedInt<uint128_t>& var, variant& vo, uint32_t max_depth) {
+	var.debug_instrument();
+	to_variant(var.unwrap(), vo, max_depth);
+	var.debug_instrument();
+}
+
+void from_variant( const variant& var, HookedInt<uint128_t>& vo, uint32_t max_depth) {
+	vo.debug_instrument();
+	from_variant(var, vo.unwrap(), max_depth);
+	vo.debug_instrument();
+}
+
 #if defined(__APPLE__) or defined(__OpenBSD__)
    void to_variant( size_t s, variant& v, uint32_t max_depth ) { v = variant( uint64_t(s) ); }
 #elif !defined(_WIN32)

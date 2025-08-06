@@ -19,6 +19,8 @@
 #include <boost/endian/buffers.hpp>
 #include <boost/multi_index_container_fwd.hpp>
 
+#include <fc/hookedint.hpp>
+
 #ifdef FC_ASSERT
 #define _FC_ASSERT(...) FC_ASSERT( __VA_ARGS__ )
 #else
@@ -152,6 +154,8 @@ namespace fc
 
    void to_variant( const uint128_t& var, variant& vo, uint32_t max_depth = 1 );
    void from_variant( const variant& var, uint128_t& vo, uint32_t max_depth = 1 );
+   void to_variant( const HookedInt<uint128_t>& var, variant& vo, uint32_t max_depth = 1 );
+   void from_variant( const variant& var, HookedInt<uint128_t>& vo, uint32_t max_depth = 1 );
 
    #if defined(__APPLE__) or defined(__OpenBSD__)
    void to_variant( size_t s, variant& v, uint32_t max_depth = 1 );
