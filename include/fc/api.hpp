@@ -6,11 +6,38 @@
 
 // ms visual c++ (as of 2013) doesn't accept the standard syntax for calling a 
 // templated member function (foo->template bar();)
-#ifdef _MSC_VER
-# define FC_CALL_MEMBER_TEMPLATE_KEYWORD
+
+// related to: missing-template-arg-list-after-template-kw
+// the correct C++ is to define this macro to nothing "", so to not use the extra word "template" in this places
+// here we enable the extra word if we think compiler needs it, or if it was done that way on that compilers before in this project
+// the older code here was using none "" for MSVC, and "template" for other compilers, so we keep it similar, but at new g++ and clang++
+// then we switch to the correct none "" version.
+
+#if defined(_MSC_VER)
+  // MSVC was compiled here this way:
+  #define EXP_TEMPLATE_DISAMBIG
+#elif defined(__clang__)
+  // Treat Clang <= 19 (especially 18) as "old" - it was compiled with "template" word:
+  #if __clang_major__ <= 19
+    #define EXP_TEMPLATE_DISAMBIG template
+  #else
+		// new clang: use correct:
+    #define EXP_TEMPLATE_DISAMBIG
+  #endif
+#elif defined(__GNUC__)
+  // Treat Clang <= 19 (especially 18) as "old" - it was compiled with "template" word:
+  #if __GNUC__ <= 13
+    #define EXP_TEMPLATE_DISAMBIG template
+  #else
+		// new gcc: use correct:
+    #define EXP_TEMPLATE_DISAMBIG
+  #endif
 #else
-# define FC_CALL_MEMBER_TEMPLATE_KEYWORD template
+  // for unknown compilers:
+  #define EXP_TEMPLATE_DISAMBIG
 #endif
+
+# define FC_CALL_MEMBER_TEMPLATE_KEYWORD EXP_TEMPLATE_DISAMBIG
 
 namespace fc {
   namespace detail {
