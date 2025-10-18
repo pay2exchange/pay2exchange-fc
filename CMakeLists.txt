@@ -345,6 +345,13 @@ target_link_libraries( fc PUBLIC ${LINK_USR_LOCAL_LIB}  ${OPENSSL_LIBRARIES} ${Z
                                  ${PLATFORM_SPECIFIC_LIBS} ${RPCRT4} ${CMAKE_DL_LIBS} ${rt_library}
                                  ${editline_libraries} secp256k1 ${CMAKE_REQUIRED_LIBRARIES} )
 
+
+# Ensure fc depends on external projects to prevent race conditions in parallel builds
+add_dependencies(fc secp256k1)
+IF(NOT WIN32)
+  add_dependencies(fc editline)
+ENDIF(NOT WIN32)
+
 if(WIN32 AND MSVC)
     set_source_files_properties( src/network/http/websocket.cpp PROPERTIES COMPILE_FLAGS "/bigobj" )
 elseif(WIN32 AND MINGW)
