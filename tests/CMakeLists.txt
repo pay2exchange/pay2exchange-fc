@@ -1,26 +1,46 @@
 if( ECC_IMPL STREQUAL secp256k1 )
     add_executable( blind all_tests.cpp crypto/blind.cpp )
     target_link_libraries( blind fc )
+    if(NOT WIN32)
+      add_dependencies(blind project_editline project_secp256k1)
+    endif(NOT WIN32)
 endif()
 
 add_executable( task_cancel_test all_tests.cpp thread/task_cancel.cpp )
 target_link_libraries( task_cancel_test fc )
-
+if(NOT WIN32)
+  add_dependencies(task_cancel_test project_editline project_secp256k1)
+endif(NOT WIN32)
 
 add_executable( bloom_test all_tests.cpp bloom_test.cpp )
 target_link_libraries( bloom_test fc )
+if(NOT WIN32)
+  add_dependencies(bloom_test project_editline project_secp256k1)
+endif(NOT WIN32)
 
 add_executable( hmac_test hmac_test.cpp )
 target_link_libraries( hmac_test fc )
+if(NOT WIN32)
+  add_dependencies(hmac_test project_editline project_secp256k1)
+endif(NOT WIN32)
 
 add_executable( ecc_test crypto/ecc_test.cpp )
 target_link_libraries( ecc_test fc )
+if(NOT WIN32)
+  add_dependencies(ecc_test project_editline project_secp256k1)
+endif(NOT WIN32)
 
 add_executable( ws_test_server ws_test_server.cpp )
 target_link_libraries( ws_test_server fc )
+if(NOT WIN32)
+  add_dependencies(ws_test_server project_editline project_secp256k1)
+endif(NOT WIN32)
 
 add_executable( ws_test_client ws_test_client.cpp )
 target_link_libraries( ws_test_client fc )
+if(NOT WIN32)
+  add_dependencies(ws_test_client project_editline project_secp256k1)
+endif(NOT WIN32)
 
 #add_executable( test_aes aes_test.cpp )
 #target_link_libraries( test_aes fc ${rt_library} ${pthread_library} )
@@ -60,3 +80,6 @@ add_executable( all_tests all_tests.cpp
                           api_tests.cpp
                           )
 target_link_libraries( all_tests fc )
+if(NOT WIN32)
+  add_dependencies(all_tests project_editline project_secp256k1)
+endif(NOT WIN32)
