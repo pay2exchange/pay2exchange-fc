@@ -66,10 +66,10 @@ else ( WIN32 )
     ExternalProject_Add( project_secp256k1
      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp
      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp
-     CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp --with-bignum=no
+     CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp --with-bignum=no --enable-static --disable-shared
      BUILD_COMMAND make
      INSTALL_COMMAND true
-     BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp/.libs/libsecp256k1.a
+     BUILD_BYPRODUCTS ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/src/project_secp256k1-build/.libs/libsecp256k1.a
     )
 
     ExternalProject_Add_Step(project_secp256k1 autogen
@@ -81,10 +81,10 @@ else ( WIN32 )
     ExternalProject_Get_Property(project_secp256k1 binary_dir)
 
     add_library(secp256k1 STATIC IMPORTED)
-    set_property(TARGET secp256k1 PROPERTY IMPORTED_LOCATION ${binary_dir}/.libs/libsecp256k1${CMAKE_STATIC_LIBRARY_SUFFIX})
+    set_property(TARGET secp256k1 PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/src/project_secp256k1-build/.libs/libsecp256k1${CMAKE_STATIC_LIBRARY_SUFFIX})
     set_property(TARGET secp256k1 PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/include)
     add_dependencies(secp256k1 project_secp256k1)
-    install( FILES ${binary_dir}/.libs/libsecp256k1${CMAKE_STATIC_LIBRARY_SUFFIX} DESTINATION lib/cryptonomex )
+    install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/src/project_secp256k1-build/.libs/libsecp256k1${CMAKE_STATIC_LIBRARY_SUFFIX} DESTINATION lib/cryptonomex )
 endif ( WIN32 )
 # End configure secp256k1-zkp
 
@@ -98,7 +98,7 @@ if ( NOT WIN32 )
      CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/editline --enable-static --disable-shared
      BUILD_COMMAND make
      INSTALL_COMMAND true
-     BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/vendor/editline/src/.libs/libeditline.a
+     BUILD_BYPRODUCTS ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/src/project_editline-build/src/.libs/libeditline.a
     )
 
     ExternalProject_Add_Step(project_editline autogen
@@ -108,10 +108,10 @@ if ( NOT WIN32 )
     )
     ExternalProject_Get_Property(project_editline binary_dir)
     add_library(editline STATIC IMPORTED)
-    set_property(TARGET editline PROPERTY IMPORTED_LOCATION ${binary_dir}/src/.libs/libeditline${CMAKE_STATIC_LIBRARY_SUFFIX})
+    set_property(TARGET editline PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/src/project_editline-build/src/.libs/libeditline${CMAKE_STATIC_LIBRARY_SUFFIX})
     set_property(TARGET editline PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/include)
     add_dependencies(editline project_editline)
-    install( FILES ${binary_dir}/src/.libs/libeditline${CMAKE_STATIC_LIBRARY_SUFFIX} DESTINATION lib/cryptonomex )
+    install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/src/project_editline-build/src/.libs/libeditline${CMAKE_STATIC_LIBRARY_SUFFIX} DESTINATION lib/cryptonomex )
 endif ( NOT WIN32 )
 # End configure editline
 
@@ -350,6 +350,8 @@ target_link_libraries( fc PUBLIC ${LINK_USR_LOCAL_LIB}  ${OPENSSL_LIBRARIES} ${Z
 add_dependencies(fc secp256k1)
 IF(NOT WIN32)
   add_dependencies(fc editline)
+  # Add direct dependency to external project to ensure it completes before fc compilation starts
+  add_dependencies(fc project_editline)
 ENDIF(NOT WIN32)
 
 if(WIN32 AND MSVC)
