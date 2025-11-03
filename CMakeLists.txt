@@ -434,7 +434,7 @@ elseif(WIN32 AND MINGW)
 endif()
 
 
-IF(Boost_UNIT_TEST_FRAMEWORK_LIBRARY MATCHES "\\.(so|dll)$")
+IF(Boost_UNIT_TEST_FRAMEWORK_LIBRARY MATCHES "\\.(so|dll)$$")
 IF(MSVC)
 add_definitions(/DBOOST_TEST_DYN_LINK)
 ELSE(MSVC)
