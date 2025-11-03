@@ -96,7 +96,7 @@ if ( NOT WIN32 )
     # Create a build stamp directory to track build progress
     set(EDITLINE_STAMP_DIR "${CMAKE_CURRENT_BINARY_DIR}/vendor/editline/src/project_editline-stamp")
     set(EDITLINE_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline")
-    set(EDITLINE_LIB_PATH "${EDITLINE_BUILD_DIR}/src/.libs/libeditline.la")
+    set(EDITLINE_LIB_PATH "${EDITLINE_BUILD_DIR}/src/.libs/libeditline.a")
 
     # Ensure build directory exists and is properly initialized
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vendor/editline")
@@ -146,7 +146,7 @@ if ( NOT WIN32 )
     )
     add_dependencies(editline editline_ready)
     
-    install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/src/.libs/libeditline.la DESTINATION lib/cryptonomex )
+    install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/src/.libs/libeditline.a DESTINATION lib/cryptonomex )
 endif ( NOT WIN32 )
 # End configure editline
 
