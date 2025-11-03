@@ -66,10 +66,11 @@ else ( WIN32 )
     ExternalProject_Add( project_secp256k1
      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp
      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp
+     BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp
      CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp --with-bignum=no
      BUILD_COMMAND make
      INSTALL_COMMAND true
-     BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp/.libs/libsecp256k1.a
+     BUILD_BYPRODUCTS ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/.libs/libsecp256k1.a
     )
 
     ExternalProject_Add_Step(project_secp256k1 autogen
@@ -81,10 +82,10 @@ else ( WIN32 )
     ExternalProject_Get_Property(project_secp256k1 binary_dir)
 
     add_library(secp256k1 STATIC IMPORTED)
-    set_property(TARGET secp256k1 PROPERTY IMPORTED_LOCATION ${binary_dir}/.libs/libsecp256k1${CMAKE_STATIC_LIBRARY_SUFFIX})
+    set_property(TARGET secp256k1 PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/.libs/libsecp256k1${CMAKE_STATIC_LIBRARY_SUFFIX})
     set_property(TARGET secp256k1 PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/include)
     add_dependencies(secp256k1 project_secp256k1)
-    install( FILES ${binary_dir}/.libs/libsecp256k1${CMAKE_STATIC_LIBRARY_SUFFIX} DESTINATION lib/cryptonomex )
+    install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/.libs/libsecp256k1${CMAKE_STATIC_LIBRARY_SUFFIX} DESTINATION lib/cryptonomex )
 endif ( WIN32 )
 # End configure secp256k1-zkp
 
@@ -95,10 +96,11 @@ if ( NOT WIN32 )
     ExternalProject_Add( project_editline
      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/vendor/editline
      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline
+     BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline
      CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/editline --enable-static --disable-shared
      BUILD_COMMAND make
      INSTALL_COMMAND true
-     BUILD_BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/vendor/editline/src/.libs/libeditline.a
+     BUILD_BYPRODUCTS ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/src/.libs/libeditline.a
     )
 
     ExternalProject_Add_Step(project_editline autogen
@@ -108,10 +110,10 @@ if ( NOT WIN32 )
     )
     ExternalProject_Get_Property(project_editline binary_dir)
     add_library(editline STATIC IMPORTED)
-    set_property(TARGET editline PROPERTY IMPORTED_LOCATION ${binary_dir}/src/.libs/libeditline${CMAKE_STATIC_LIBRARY_SUFFIX})
+    set_property(TARGET editline PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/src/.libs/libeditline${CMAKE_STATIC_LIBRARY_SUFFIX})
     set_property(TARGET editline PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/include)
     add_dependencies(editline project_editline)
-    install( FILES ${binary_dir}/src/.libs/libeditline${CMAKE_STATIC_LIBRARY_SUFFIX} DESTINATION lib/cryptonomex )
+    install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/src/.libs/libeditline${CMAKE_STATIC_LIBRARY_SUFFIX} DESTINATION lib/cryptonomex )
 endif ( NOT WIN32 )
 # End configure editline
 
@@ -347,10 +349,33 @@ target_link_libraries( fc PUBLIC ${LINK_USR_LOCAL_LIB}  ${OPENSSL_LIBRARIES} ${Z
 
 
 # Ensure fc depends on external projects to prevent race conditions in parallel builds
+# Layer 3: Stronger dependency chain - fc depends directly on external projects
 add_dependencies(fc secp256k1)
 IF(NOT WIN32)
-  add_dependencies(fc editline)
+  add_dependencies(fc editline project_editline)
 ENDIF(NOT WIN32)
+
+# Layer 4: Ninja-specific ultra-robust protection for extreme parallelism (up to 128 threads)
+if("${CMAKE_GENERATOR}" STREQUAL "Ninja")
+  # Create job pools to control parallelism and ensure proper ordering
+  set_property(GLOBAL PROPERTY JOB_POOLS
+    compile=16  # Limit compile jobs to prevent resource exhaustion
+    link=4      # Limit link jobs to prevent memory issues with high parallelism
+  )
+  
+  # Apply job pools to the fc library for controlled building
+  set_property(TARGET fc PROPERTY JOB_POOL_COMPILE compile)
+  set_property(TARGET fc PROPERTY JOB_POOL_LINK link)
+  
+  # Ensure external projects complete before any fc-dependent targets can start
+  if(NOT WIN32)
+    add_custom_target(external_projects_barrier
+      DEPENDS project_editline project_secp256k1
+      COMMENT "Ensuring all external projects complete before proceeding"
+    )
+    add_dependencies(fc external_projects_barrier)
+  endif()
+endif()
 
 if(WIN32 AND MSVC)
     set_source_files_properties( src/network/http/websocket.cpp PROPERTIES COMPILE_FLAGS "/bigobj" )
