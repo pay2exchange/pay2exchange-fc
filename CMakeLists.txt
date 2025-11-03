@@ -108,7 +108,7 @@ if ( NOT WIN32 )
      STAMP_DIR ${EDITLINE_STAMP_DIR}
      # Use configure with absolute paths for more reliable builds
      CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/editline --enable-static --disable-shared --disable-shared-libs
-     BUILD_COMMAND $(MAKE) -j1
+     BUILD_COMMAND make -j1
      INSTALL_COMMAND true
      BUILD_BYPRODUCTS ${EDITLINE_LIB_PATH}
      # Force sequential building to prevent race conditions
