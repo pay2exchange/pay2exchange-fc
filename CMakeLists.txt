@@ -93,27 +93,60 @@ endif ( WIN32 )
 if ( NOT WIN32 )
     include(ExternalProject)
 
+    # Create a build stamp directory to track build progress
+    set(EDITLINE_STAMP_DIR "${CMAKE_CURRENT_BINARY_DIR}/vendor/editline/src/project_editline-stamp")
+    set(EDITLINE_BUILD_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline")
+    set(EDITLINE_LIB_PATH "${EDITLINE_BUILD_DIR}/src/.libs/libeditline.la")
+
+    # Ensure build directory exists and is properly initialized
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vendor/editline")
+
     ExternalProject_Add( project_editline
      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/vendor/editline
      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline
      BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline
-     CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/editline --enable-static --disable-shared
-     BUILD_COMMAND make
+     STAMP_DIR ${EDITLINE_STAMP_DIR}
+     # Use configure with absolute paths for more reliable builds
+     CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/configure --prefix=${CMAKE_CURRENT_BINARY_DIR}/vendor/editline --enable-static --disable-shared --disable-shared-libs
+     BUILD_COMMAND $(MAKE) -j1
      INSTALL_COMMAND true
-     BUILD_BYPRODUCTS ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/src/.libs/libeditline.a
+     BUILD_BYPRODUCTS ${EDITLINE_LIB_PATH}
+     # Force sequential building to prevent race conditions
+     USES_TERMINAL_BUILD TRUE
+     # Add explicit step ordering
+     STEP_TARGETS configure build
     )
 
+    # Add autogen step with explicit dependency management
     ExternalProject_Add_Step(project_editline autogen
      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline
      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/autogen.sh
      DEPENDERS configure
+     DEPENDEES download patch
+     # Ensure autogen completes before configure
+     USES_TERMINAL TRUE
     )
+
+
     ExternalProject_Get_Property(project_editline binary_dir)
-    add_library(editline STATIC IMPORTED)
-    set_property(TARGET editline PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/src/.libs/libeditline${CMAKE_STATIC_LIBRARY_SUFFIX})
+    
+    # Create the imported library with more robust configuration
+    add_library(editline STATIC IMPORTED GLOBAL)
+    set_property(TARGET editline PROPERTY IMPORTED_LOCATION ${EDITLINE_LIB_PATH})
     set_property(TARGET editline PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/include)
+    
+    # Create a strong dependency chain
     add_dependencies(editline project_editline)
-    install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/src/.libs/libeditline${CMAKE_STATIC_LIBRARY_SUFFIX} DESTINATION lib/cryptonomex )
+    
+    # Add custom target for editline synchronization
+    add_custom_target(editline_ready
+        COMMAND test -f ${EDITLINE_LIB_PATH} || (echo "Waiting for editline build to complete..." && exit 1)
+        DEPENDS project_editline
+        COMMENT "Ensuring editline is ready for linking"
+    )
+    add_dependencies(editline editline_ready)
+    
+    install( FILES ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline/src/.libs/libeditline.la DESTINATION lib/cryptonomex )
 endif ( NOT WIN32 )
 # End configure editline
 
@@ -349,33 +382,49 @@ target_link_libraries( fc PUBLIC ${LINK_USR_LOCAL_LIB}  ${OPENSSL_LIBRARIES} ${Z
 
 
 # Ensure fc depends on external projects to prevent race conditions in parallel builds
-# Layer 3: Stronger dependency chain - fc depends directly on external projects
+# Layer 1: Direct dependencies on imported libraries with verification
 add_dependencies(fc secp256k1)
 IF(NOT WIN32)
-  add_dependencies(fc editline project_editline)
+  add_dependencies(fc editline editline_ready)
 ENDIF(NOT WIN32)
 
-# Layer 4: Ninja-specific additional protection, should work for high parallelism of build
+# Layer 2: Dependencies on external project targets to ensure build completion
+IF(NOT WIN32)
+  add_dependencies(fc project_editline project_secp256k1)
+ENDIF(NOT WIN32)
+
+# Layer 3: Universal barrier for all generators to prevent race conditions
+# Create a comprehensive barrier target that ensures all external dependencies are built
+if(NOT WIN32)
+  add_custom_target(all_external_deps_barrier
+    DEPENDS project_editline project_secp256k1 editline_ready
+    COMMENT "Universal barrier: ensuring all external projects complete before main build"
+  )
+  add_dependencies(fc all_external_deps_barrier)
+endif()
+
+# Layer 4: Generator-specific optimizations for high parallelism builds
 if("${CMAKE_GENERATOR}" STREQUAL "Ninja")
-  # Create job pools to control parallelism and ensure proper ordering
-  #set_property(GLOBAL PROPERTY JOB_POOLS
-  #  compile=16  # Limit compile jobs to prevent resource exhaustion
-  #  link=4      # Limit link jobs to prevent memory issues with high parallelism
-  #)
-  # TODO review this idea
-  # Apply job pools to the fc library for controlled building
-  #set_property(TARGET fc PROPERTY JOB_POOL_COMPILE compile)
-  #set_property(TARGET fc PROPERTY JOB_POOL_LINK link)
-  
-  # Ensure external projects complete before any fc-dependent targets can start
+  # Additional ninja-specific synchronization
   if(NOT WIN32)
-    add_custom_target(external_projects_barrier
-      DEPENDS project_editline project_secp256k1
-      COMMENT "Ensuring all external projects complete before proceeding"
+    # Create step-by-step build verification for Ninja builds
+    add_custom_target(ninja_build_guard
+      COMMAND test -f ${EDITLINE_LIB_PATH} || (echo "Race condition detected: editline not ready" && exit 1)
+      DEPENDS all_external_deps_barrier
+      COMMENT "Ninja build guard: verifying external dependencies are complete"
     )
-    add_dependencies(fc external_projects_barrier)
+    add_dependencies(fc ninja_build_guard)
   endif()
-  # TODO: confirm: editline not on win32? and the other library, secp?
+elseif("${CMAKE_GENERATOR}" STREQUAL "Unix Makefiles")
+  # Make-specific additional safeguards for high parallelism
+  if(NOT WIN32)
+    add_custom_target(make_build_guard
+      COMMAND test -f ${EDITLINE_LIB_PATH} || (echo "Race condition detected: editline not ready" && exit 1)
+      DEPENDS all_external_deps_barrier
+      COMMENT "Make build guard: verifying external dependencies are complete"
+    )
+    add_dependencies(fc make_build_guard)
+  endif()
 endif()
 
 if(WIN32 AND MSVC)
