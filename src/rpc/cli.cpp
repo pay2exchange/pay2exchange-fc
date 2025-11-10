@@ -2,6 +2,8 @@
 #include <fc/thread/thread.hpp>
 
 #include <iostream>
+#include <sstream>
+#include <stdexcept>
 
 #ifndef WIN32
 #include <unistd.h>
@@ -17,7 +19,50 @@
 
 #include <boost/regex.hpp>
 
+
 namespace fc { namespace rpc {
+
+/*
+const int m_info_fd_commands, int m_info_fd_response; ///< keep the FD numbers we got, just for information (do not directly use them for read/write)
+using fd_source = boost::iostreams::file_descriptor_source;
+using fd_sink = boost::iostreams::file_descriptor_sink;
+using fd_stream_in = boost::iostreams::stream<fd_source>;
+using fd_stream_out = boost::iostreams::stream<fd_sink>;    
+std::unique_ptr<fd_stream_in> cmd_in_file;   // command input pipe - as boost iostream
+std::unique_ptr<fd_stream_out> cmd_out_file; // command output pipe - as boost iostream
+*/
+
+cli_cmd_provider_pipe::cli_cmd_provider_pipe(int fd_commands, int fd_response)
+   : m_info_fd_commands(fd_commands), m_info_fd_response(fd_response)
+{
+   cmd_in_file = std::make_unique<fd_stream_in>(fd_source(fd_commands, boost::iostreams::close_handle));
+   cmd_out_file = std::make_unique<fd_stream_out>(fd_sink(fd_response, boost::iostreams::close_handle));
+}
+
+std::string cli_cmd_provider_pipe::get_name() { return "pipe-commands"; }
+std::string cli_cmd_provider_pipe::get_short_info() {
+   std::ostringstream oss;
+   oss << get_name() << " on FD in=" << m_info_fd_commands << " out=" << m_info_fd_response ;
+   return oss.str();
+}
+std::string cli_cmd_provider_pipe::read_command() {
+   long long int cmd_len=-1;
+   auto& input = *this->cmd_in_file;
+   input >> cmd_len;
+   if (cmd_len<0) throw std::runtime_error("Reading cmd: invalid zero/neg len of command");
+   if (cmd_len>max_cmd_len) throw std::runtime_error("Reading cmd: too long len of commnad");
+   char sep1;
+   input >> sep1;
+   if (sep1 != ';') throw std::runtime_error("Reading cmd: invalid separator sep1");
+
+   std::string theline(cmd_len, '\0');
+   input.read(&theline[0], cmd_len);
+   std::streamsize bytesRead = input.gcount();
+   FC_ASSERT(theline.size() == bytesRead , "read (gcount?) has other size than the resulting data");
+
+   return theline;
+}
+
 
 static boost::regex& cli_regex_secret()
 {
@@ -69,16 +114,29 @@ void cli::set_regex_secret( const string& expr )
    cli_regex_secret() = expr;
 }
 
+void cli::set_read_hook(std::weak_ptr<t_cmd_provider> provider) {
+   m_cmd_provider = provider;
+}
+
 void cli::run()
 {
    while( !_run_complete.canceled() )
    {
       try
       {
+         
          std::string line;
          try
          {
-            getline( _prompt.c_str(), line );
+            if (m_cmd_provider.has_value()) {
+               std::cout << "Using command provider - READ...\n";
+               std::shared_ptr< cli::t_cmd_provider > provider = m_cmd_provider.value().lock();
+               FC_ASSERT( provider != nullptr , "provider is set so it must be not null / able to lock");
+               line = provider->operator()();
+               std::cout << "Read command (size="<<line.size()<<") [" << line << "]\n";
+            } else {
+               getline( _prompt.c_str(), line );
+            }
          }
          catch ( const fc::eof_exception& e )
          {

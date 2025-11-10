@@ -199,6 +199,7 @@ set( fc_sources
      src/exception.cpp
      src/variant_object.cpp
      src/static_variant.cpp
+     src/stdcomp.cpp
      src/thread/thread.cpp
      src/thread/thread_specific.cpp
      src/thread/future.cpp
