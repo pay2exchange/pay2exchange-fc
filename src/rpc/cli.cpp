@@ -60,6 +60,15 @@ std::string cli_cmd_provider_pipe::read_command() {
    std::streamsize bytesRead = input.gcount();
    FC_ASSERT(theline.size() == bytesRead , "read (gcount?) has other size than the resulting data");
 
+   {
+      const std::string exp_endmark = ";END";
+      std::string given_endmark(exp_endmark.size(), '\0');
+      input.read(&given_endmark[0], exp_endmark.size());
+      std::streamsize bytesRead_endmark = input.gcount();
+      FC_ASSERT(given_endmark.size() == bytesRead_endmark , "read (gcount?) failed when reading endmark after command");
+      FC_ASSERT(given_endmark == exp_endmark , "invalid end-mark after the command");
+   }
+
    return theline;
 }
 
