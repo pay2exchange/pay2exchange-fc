@@ -18,7 +18,8 @@
 #endif
 
 #include <boost/regex.hpp>
-
+#include <thread>
+#include <chrono>
 
 namespace fc { namespace rpc {
 
@@ -181,7 +182,9 @@ void cli::run()
             _getline_thread = nullptr;
             break;
          }
-         std::cout << e.to_detail_string() << "\n";
+         std::cout << "Error: " << e.to_detail_string() << "\n";
+         std::cerr << "Due to error captured in cli loop, will now sleep (anti-flood) \n";
+         std::this_thread::sleep_for( std::chrono::milliseconds(1000) );
       }
    }
 }
