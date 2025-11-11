@@ -23,6 +23,7 @@ namespace fc { namespace rpc {
 
    /**
     *  A funciton that will will give commands to run in the CLI, e.g. reading from pipe or other.
+    *  Also for writting back repies.
     */
    class cli_cmd_provider {
       public:
@@ -30,6 +31,7 @@ namespace fc { namespace rpc {
          virtual std::string get_name()=0;
          virtual std::string get_short_info()=0;
          virtual std::string read_command()=0;
+         virtual void write_reply(const std::string & msg)=0;
    };
 
    class cli_cmd_provider_pipe : public cli_cmd_provider {
@@ -50,7 +52,8 @@ namespace fc { namespace rpc {
          virtual ~cli_cmd_provider_pipe()=default;
          virtual std::string get_name();
          virtual std::string get_short_info();
-         virtual std::string read_command();
+         virtual std::string read_command(); ///< asks to get the command (e.g. from pipe)
+         virtual void write_reply(const std::string & msg); ///< sends back the reply from our command usually (e.g. to pipe)
    };
 
    /**
@@ -66,7 +69,7 @@ namespace fc { namespace rpc {
          virtual variant send_callback( uint64_t callback_id, variants args = variants() );
          virtual void    send_notice( uint64_t callback_id, variants args = variants() );
 
-         using t_cmd_provider = std::function<std::string(void)>; ///< functions that provide commands
+         using t_cmd_provider = cli_cmd_provider;
          fc::stdcomp::optional< std::weak_ptr< t_cmd_provider> > m_cmd_provider;
 
          virtual void set_read_hook(std::weak_ptr<t_cmd_provider> provider);

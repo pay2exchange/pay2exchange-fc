@@ -4,6 +4,8 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <cstring>  // for strerror
+#include <cerrno>   // for errno
 
 #ifndef WIN32
 #include <unistd.h>
@@ -73,6 +75,60 @@ std::string cli_cmd_provider_pipe::read_command() {
    return theline;
 }
 
+void cli_cmd_provider_pipe::write_reply(const std::string & msg) {
+   std::cout << "Wallet: Writting reply to pipe: " << msg << "...\n";
+   long long int cmd_len = msg.size();
+   
+   try {
+       // Format the response using the same protocol as expected
+       std::string formatted_response = std::to_string(cmd_len) + ";" + msg + ";END";
+       
+       // Use the stored file descriptor directly
+       int fd = m_info_fd_response;
+       
+       std::cout << "Wallet: About to write " << formatted_response.length() << " bytes to FD " << fd << "\n";
+       
+       if (fd < 0) {
+           throw std::runtime_error("Invalid file descriptor for response pipe: " + std::to_string(fd));
+       }
+       
+       // Use direct system call to ensure immediate delivery to pipe
+       ssize_t total_written = 0;
+       const char* data = formatted_response.c_str();
+       size_t data_len = formatted_response.length();
+       
+       while (total_written < static_cast<ssize_t>(data_len)) {
+           ssize_t bytes_written = write(fd, data + total_written, data_len - total_written);
+           if (bytes_written < 0) {
+               if (errno == EINTR) {
+                   continue; // Interrupted by signal, retry
+               }
+               throw std::runtime_error("Failed to write to response pipe FD " + std::to_string(fd) + ": " + std::string(strerror(errno)));
+           }
+           total_written += bytes_written;
+           std::cout << "Wallet: Wrote " << bytes_written << " bytes to FD " << fd << " (total: " << total_written << ")\n";
+       }
+       
+       // Force immediate flush of the file descriptor
+       if (fsync(fd) < 0) {
+           std::cout << "Wallet: Warning - fsync failed on FD " << fd << ": " << strerror(errno) << "\n";
+       } else {
+           std::cout << "Wallet: fsync successful on FD " << fd << "\n";
+       }
+       
+       std::cout << "Wallet: reply is written to the pipe (direct write: " << total_written << " bytes to FD " << fd << ").\n";
+       
+   } catch (const std::exception& e) {
+       std::cout << "Wallet: Exception in write_reply: " << e.what() << "\n";
+       // Fallback to original boost::iostreams approach
+       std::cout << "Wallet: Falling back to boost::iostreams approach\n";
+       auto& output = *this->cmd_out_file;
+       output << cmd_len << ';' << msg << ";END";
+       output.flush();
+       std::cout << "Wallet: fallback write completed.\n";
+   }
+}
+
 
 static boost::regex& cli_regex_secret()
 {
@@ -138,11 +194,11 @@ void cli::run()
          std::string line;
          try
          {
-            if (m_cmd_provider.has_value()) {
+            if (m_cmd_provider.has_value()) { // CLI RPC also via pipe - hooks in here - we get command here
                std::cout << "Using command provider - READ...\n";
                std::shared_ptr< cli::t_cmd_provider > provider = m_cmd_provider.value().lock();
                FC_ASSERT( provider != nullptr , "provider is set so it must be not null / able to lock");
-               line = provider->operator()();
+               line = provider->read_command();
                std::cout << "Read command (size="<<line.size()<<") [" << line << "]\n";
             } else {
                getline( _prompt.c_str(), line );
@@ -166,14 +222,29 @@ void cli::run()
 
          const string& method = args[0].get_string();
 
-         auto result = receive_call( 0, method, variants( args.begin()+1,args.end() ) );
+         auto result = receive_call( 0, method, variants( args.begin()+1,args.end() ) );  
          auto itr = _result_formatters.find( method );
+
+         std::string out_str;
          if( itr == _result_formatters.end() )
          {
-            std::cout << fc::json::to_pretty_string( result ) << "\n";
+            std::ostringstream oss;
+            oss << fc::json::to_pretty_string( result );
+            out_str = oss.str();
+            std::cout << "Wallet: result(A):" << out_str << "\n";
          }
-         else
-            std::cout << itr->second( result, args ) << "\n";
+         else {
+            std::ostringstream oss;
+            oss << itr->second( result, args ) << "\n";
+            out_str = oss.str();
+            std::cout << "Wallet: result(B):" << out_str << "\n";
+         }
+
+         std::cout << "Using command provider - WRITE...\n";
+         std::shared_ptr< cli::t_cmd_provider > provider = m_cmd_provider.value().lock();
+         FC_ASSERT( provider != nullptr , "provider is set so it must be not null / able to lock");
+         std::cout << "Write command (size="<<out_str.size()<<")\n";
+         provider->write_reply(out_str);
       }
       catch ( const fc::exception& e )
       {
