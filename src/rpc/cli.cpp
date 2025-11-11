@@ -6,6 +6,8 @@
 #include <stdexcept>
 #include <cstring>  // for strerror
 #include <cerrno>   // for errno
+#include <fcntl.h>  // for fcntl
+#include <sys/stat.h> // for fstat
 
 #ifndef WIN32
 #include <unistd.h>
@@ -76,57 +78,121 @@ std::string cli_cmd_provider_pipe::read_command() {
 }
 
 void cli_cmd_provider_pipe::write_reply(const std::string & msg) {
+   std::cout << "Wallet: ===== WRITE_REPLY START =====\n";
    std::cout << "Wallet: Writting reply to pipe: " << msg << "...\n";
    long long int cmd_len = msg.size();
+   
+   // EXTENSIVE DEBUGGING - Check file descriptors
+   int fd = m_info_fd_response;
+   std::cout << "Wallet: Using stored FD " << fd << " for response\n";
+   
+   // Check if FD is valid using fcntl
+   int flags = fcntl(fd, F_GETFL);
+   if (flags == -1) {
+       std::cout << "Wallet: ERROR - FD " << fd << " is invalid or closed: " << strerror(errno) << "\n";
+   } else {
+       std::cout << "Wallet: FD " << fd << " is valid, flags: " << flags;
+       if (flags & O_WRONLY) std::cout << " (write-only)";
+       if (flags & O_RDWR) std::cout << " (read-write)";
+       if (flags & O_NONBLOCK) std::cout << " (non-blocking)";
+       std::cout << "\n";
+   }
+   
+   // Check if we can stat the FD
+   struct stat st;
+   if (fstat(fd, &st) == -1) {
+       std::cout << "Wallet: ERROR - Cannot fstat FD " << fd << ": " << strerror(errno) << "\n";
+   } else {
+       std::cout << "Wallet: fstat successful for FD " << fd << ", mode: " << std::oct << st.st_mode << std::dec;
+       if (S_ISFIFO(st.st_mode)) std::cout << " (FIFO/pipe)";
+       if (S_ISREG(st.st_mode)) std::cout << " (regular file)";
+       if (S_ISCHR(st.st_mode)) std::cout << " (character device)";
+       std::cout << "\n";
+   }
+   
+   // Check boost::iostreams state
+   std::cout << "Wallet: Checking boost::iostreams state...\n";
+   if (cmd_out_file) {
+       auto& output = *cmd_out_file;
+       std::cout << "Wallet: boost::iostreams stream exists\n";
+       std::cout << "Wallet: stream good(): " << output.good() << "\n";
+       std::cout << "Wallet: stream eof(): " << output.eof() << "\n";
+       std::cout << "Wallet: stream fail(): " << output.fail() << "\n";
+       std::cout << "Wallet: stream bad(): " << output.bad() << "\n";
+   } else {
+       std::cout << "Wallet: ERROR - cmd_out_file is null!\n";
+   }
    
    try {
        // Format the response using the same protocol as expected
        std::string formatted_response = std::to_string(cmd_len) + ";" + msg + ";END";
-       
-       // Use the stored file descriptor directly
-       int fd = m_info_fd_response;
-       
-       std::cout << "Wallet: About to write " << formatted_response.length() << " bytes to FD " << fd << "\n";
+       std::cout << "Wallet: Formatted response length: " << formatted_response.length() << "\n";
+       std::cout << "Wallet: First 100 chars of response: [" << formatted_response.substr(0, 100) << "]\n";
        
        if (fd < 0) {
            throw std::runtime_error("Invalid file descriptor for response pipe: " + std::to_string(fd));
        }
+       
+       std::cout << "Wallet: About to attempt direct write to FD " << fd << "\n";
        
        // Use direct system call to ensure immediate delivery to pipe
        ssize_t total_written = 0;
        const char* data = formatted_response.c_str();
        size_t data_len = formatted_response.length();
        
+       std::cout << "Wallet: Starting write loop, data_len=" << data_len << "\n";
+       
        while (total_written < static_cast<ssize_t>(data_len)) {
+           std::cout << "Wallet: Attempting to write " << (data_len - total_written) << " bytes to FD " << fd << "\n";
            ssize_t bytes_written = write(fd, data + total_written, data_len - total_written);
+           std::cout << "Wallet: write() returned " << bytes_written << "\n";
+           
            if (bytes_written < 0) {
+               std::cout << "Wallet: write() failed with errno " << errno << ": " << strerror(errno) << "\n";
                if (errno == EINTR) {
+                   std::cout << "Wallet: Interrupted by signal, retrying...\n";
                    continue; // Interrupted by signal, retry
                }
                throw std::runtime_error("Failed to write to response pipe FD " + std::to_string(fd) + ": " + std::string(strerror(errno)));
            }
            total_written += bytes_written;
-           std::cout << "Wallet: Wrote " << bytes_written << " bytes to FD " << fd << " (total: " << total_written << ")\n";
+           std::cout << "Wallet: Successfully wrote " << bytes_written << " bytes to FD " << fd << " (total: " << total_written << ")\n";
        }
        
+       std::cout << "Wallet: Write loop completed, total_written=" << total_written << "\n";
+       
        // Force immediate flush of the file descriptor
+       std::cout << "Wallet: Attempting fsync on FD " << fd << "\n";
        if (fsync(fd) < 0) {
            std::cout << "Wallet: Warning - fsync failed on FD " << fd << ": " << strerror(errno) << "\n";
        } else {
            std::cout << "Wallet: fsync successful on FD " << fd << "\n";
        }
        
-       std::cout << "Wallet: reply is written to the pipe (direct write: " << total_written << " bytes to FD " << fd << ").\n";
+       std::cout << "Wallet: SUCCESS - reply written to pipe (direct write: " << total_written << " bytes to FD " << fd << ").\n";
        
    } catch (const std::exception& e) {
-       std::cout << "Wallet: Exception in write_reply: " << e.what() << "\n";
+       std::cout << "Wallet: EXCEPTION in write_reply: " << e.what() << "\n";
        // Fallback to original boost::iostreams approach
-       std::cout << "Wallet: Falling back to boost::iostreams approach\n";
-       auto& output = *this->cmd_out_file;
-       output << cmd_len << ';' << msg << ";END";
-       output.flush();
-       std::cout << "Wallet: fallback write completed.\n";
+       std::cout << "Wallet: Attempting fallback to boost::iostreams approach\n";
+       
+       if (cmd_out_file) {
+           std::cout << "Wallet: Using boost::iostreams fallback\n";
+           auto& output = *cmd_out_file;
+           std::cout << "Wallet: About to write to boost::iostreams: " << cmd_len << ";[msg];END\n";
+           output << cmd_len << ';' << msg << ";END";
+           std::cout << "Wallet: Data written to boost::iostreams, calling flush...\n";
+           output.flush();
+           std::cout << "Wallet: boost::iostreams flush completed\n";
+           
+           // Check stream state after fallback
+           std::cout << "Wallet: Post-fallback stream state - good:" << output.good() << " eof:" << output.eof() << " fail:" << output.fail() << " bad:" << output.bad() << "\n";
+       } else {
+           std::cout << "Wallet: ERROR - Cannot fallback, cmd_out_file is null!\n";
+       }
    }
+   
+   std::cout << "Wallet: ===== WRITE_REPLY END =====\n";
 }
 
 
