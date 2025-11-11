@@ -21,7 +21,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/GitVersionGen")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 
 # FIX: Include and run vendor library validation BEFORE any external projects
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake_vendor_lib_validator.cmake")
+include(cmake_vendor_lib_validator)
 
 INCLUDE(GetPrerequisites)
 INCLUDE(GetGitRevisionDescription)
