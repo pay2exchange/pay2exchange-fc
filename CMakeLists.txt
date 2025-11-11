@@ -20,6 +20,9 @@ SET( CMAKE_AUTOMOC OFF )
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/GitVersionGen")
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 
+# FIX: Include and run vendor library validation BEFORE any external projects
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake_vendor_lib_validator.cmake")
+
 INCLUDE(GetPrerequisites)
 INCLUDE(GetGitRevisionDescription)
 INCLUDE(CheckLibraryExists)
@@ -43,6 +46,12 @@ LIST(APPEND BOOST_COMPONENTS coroutine thread date_time filesystem system progra
 # boost::endian is also required, but FindBoost can't handle header-only libs
 SET( Boost_USE_STATIC_LIBS ON CACHE STRING "ON or OFF" )
 
+# FIX - VALIDATION: Check vendor libraries BEFORE configuring external projects
+# This prevents the git clean -xdf + stale Makefile issue that has plagued builds for months
+IF(NOT WIN32)
+    validate_and_ensure_vendor_libraries()
+ENDIF(NOT WIN32)
+
 # Configure secp256k1-zkp
 if ( WIN32 )
     # autoconf won't work here, hard code the defines
@@ -63,6 +72,7 @@ if ( WIN32 )
 else ( WIN32 )
     include(ExternalProject)
 
+    # Configure secp256k1 external project with validation-aware build
     ExternalProject_Add( project_secp256k1
      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/vendor/secp256k1-zkp
      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp
@@ -71,6 +81,8 @@ else ( WIN32 )
      BUILD_COMMAND make
      INSTALL_COMMAND true
      BUILD_BYPRODUCTS ${CMAKE_CURRENT_SOURCE_DIR}/vendor/secp256k1-zkp/.libs/libsecp256k1.a
+     # Force rebuild on validation failure
+     BUILD_ALWAYS ${SECP256K1_NEEDS_REBUILD}
     )
 
     ExternalProject_Add_Step(project_secp256k1 autogen
@@ -101,6 +113,7 @@ if ( NOT WIN32 )
     # Ensure build directory exists and is properly initialized
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vendor/editline")
 
+    # Configure editline external project with validation-aware build
     ExternalProject_Add( project_editline
      PREFIX ${CMAKE_CURRENT_BINARY_DIR}/vendor/editline
      SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/vendor/editline
@@ -115,6 +128,8 @@ if ( NOT WIN32 )
      USES_TERMINAL_BUILD TRUE
      # Add explicit step ordering
      STEP_TARGETS configure build
+     # Force rebuild on validation failure
+     BUILD_ALWAYS ${EDITLINE_NEEDS_REBUILD}
     )
 
     # Add autogen step with explicit dependency management
