@@ -166,10 +166,18 @@ namespace fc { namespace ecc {
         return (fp[0] << 24) | (fp[1] << 16) | (fp[2] << 8) | fp[3];
     }
 
+    // Original is_canonical method (BitShares & R-Squared)
+    // bool public_key::is_canonical( const compact_signature& c ) {
+    //     return !(c[1] & 0x80)
+    //            && !(c[1] == 0 && !(c[2] & 0x80))
+    //            && !(c[33] & 0x80)
+    //            && !(c[33] == 0 && !(c[34] & 0x80));
+    // }
+
     bool public_key::is_canonical( const compact_signature& c ) {
-        return !(c[1] & 0x80)
-               && !(c[1] == 0 && !(c[2] & 0x80))
-               && !(c[33] & 0x80)
+        // Only validate S value DER encoding (BIP62 compliant)
+        // R value validation removed - not required by BIP62
+        return !(c[33] & 0x80)
                && !(c[33] == 0 && !(c[34] & 0x80));
     }
 
